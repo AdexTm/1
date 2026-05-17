@@ -43,7 +43,7 @@
             status.innerText = 'Скачивание и распаковка архива...';
 
             // Используем прокси для обхода ограничений CORS
-            const proxyUrl = 'https://corsproxy.io/?';
+            const proxyUrl = 'https://api.allorigins.win/raw?url=';
             const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
             
             try {
