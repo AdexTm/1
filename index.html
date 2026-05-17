@@ -3,52 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Просмотрщик ZIP с Google Drive</title>
+    <title>ZIP Viewer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .header { background: #2d2d2d; width: 100%; padding: 15px; text-align: center; position: sticky; top: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; }
-        input { padding: 8px; width: 300px; border-radius: 4px; border: none; }
+        body { font-family: sans-serif; background-color: #1a1a1a; color: white; text-align: center; margin: 0; }
+        .header { background: #2d2d2d; padding: 15px; position: sticky; top: 0; z-index: 10; }
+        input { padding: 8px; width: 350px; border-radius: 4px; border: none; }
         button { padding: 8px 15px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #gallery { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 20px; width: 100%; }
-        img { max-width: 95%; height: auto; border: 2px solid #333; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .loader { margin-top: 50px; font-style: italic; color: #aaa; }
+        #gallery { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px; }
+        img { max-width: 95%; height: auto; border: 1px solid #333; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <input type="text" id="driveLink" placeholder="Вставьте ссылку на ZIP или ID файла">
-        <button onclick="loadFromInput()">Открыть</button>
+        <input type="text" id="linkInput" placeholder="Вставьте ссылку на ZIP (Dropbox/Direct)">
+        <button onclick="processLink()">Открыть</button>
     </div>
 
-    <div id="status" class="loader">Введите ссылку или ID файла в поле выше</div>
+    <div id="status" style="margin-top: 20px;"></div>
     <div id="gallery"></div>
 
     <script>
-        // Функция для извлечения ID из ссылки Google Drive
-        function extractId(input) {
-            const match = input.match(/[-\w]{25,}/);
-            return match ? match[0] : input;
-        }
-
-        async function loadZip(fileId) {
-            if (!fileId) return;
-            
+        async function loadZip(url) {
             const gallery = document.getElementById('gallery');
             const status = document.getElementById('status');
             
-            gallery.innerHTML = '';
-            status.style.display = 'block';
-            status.innerText = 'Скачивание и распаковка архива...';
+            // Превращаем ссылку Dropbox в прямую для скачивания
+            let directUrl = url.replace('dl=0', 'dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
 
-            // Используем прокси для обхода ограничений CORS
-            const proxyUrl = 'https://api.allorigins.win/raw?url=';
-            const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-            
+            gallery.innerHTML = '';
+            status.innerText = 'Загрузка...';
+
             try {
-                const response = await fetch(proxyUrl + encodeURIComponent(driveUrl));
-                if (!response.ok) throw new Error('Не удалось получить файл. Проверьте доступ по ссылке.');
+                const response = await fetch(directUrl);
+                if (!response.ok) throw new Error('Не удалось скачать файл. Проверьте ссылку.');
                 
                 const blob = await response.blob();
                 const zip = await JSZip.loadAsync(blob);
@@ -63,37 +52,33 @@
                 const images = await Promise.all(promises);
                 images.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
 
-                status.style.display = 'none';
-
+                status.innerText = '';
                 images.forEach(imgData => {
                     const img = document.createElement('img');
                     img.src = URL.createObjectURL(imgData.blob);
                     gallery.appendChild(img);
                 });
 
-                // Обновляем URL в браузере, чтобы ссылкой можно было поделиться
-                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + fileId;
-                window.history.pushState({path: newUrl}, '', newUrl);
+                // Сохраняем ссылку в URL страницы для пересылки другу
+                const newUrl = window.location.origin + window.location.pathname + '?url=' + encodeURIComponent(url);
+                window.history.pushState({}, '', newUrl);
 
             } catch (e) {
                 status.innerText = 'Ошибка: ' + e.message;
-                console.error(e);
             }
         }
 
-        function loadFromInput() {
-            const input = document.getElementById('driveLink').value;
-            const id = extractId(input);
-            loadZip(id);
+        function processLink() {
+            const val = document.getElementById('linkInput').value;
+            if (val) loadZip(val);
         }
 
-        // Автоматическая загрузка, если ID есть в URL (для тех, кому ты скинул ссылку)
         window.onload = () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const id = urlParams.get('id');
-            if (id) {
-                document.getElementById('driveLink').value = id;
-                loadZip(id);
+            const params = new URLSearchParams(window.location.search);
+            const urlParam = params.get('url');
+            if (urlParam) {
+                document.getElementById('linkInput').value = urlParam;
+                loadZip(urlParam);
             }
         };
     </script>
